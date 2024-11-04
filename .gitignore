@@ -1,2 +1,4 @@
 *.out
 wal-c
+# Local testing directory
+wal-test
