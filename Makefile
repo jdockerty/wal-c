@@ -1,2 +1,2 @@
 build:
-	gcc main.c -o wal-c
+	gcc main.c wal.c -o wal-c

@@ -3,6 +3,9 @@
 
 typedef struct W {} Wal;
 
-Wal new_wal(char* path[]);
+// Creates a WAL path with an input directory and ID.
+char* generate_wal_path(char* dir, int id);
+
+Wal new_wal(char* path);
 
 #endif

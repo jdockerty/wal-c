@@ -1,3 +1,4 @@
+#include "wal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,13 +18,13 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
 
-        char* wal_path;
-        asprintf(&wal_path, "%s/0.wal", dir);
+        char* wal_path = generate_wal_path(dir, 0);
 
         FILE* file = fopen(wal_path, "w+");
         if (file != NULL) {
             printf("Created %s\n", wal_path);
         } else {
+            fprintf(stderr, "Unable to create WAL file.\n");
             exit(1);
         }
     } else if (strcmp(subcmd, "write") == 0) {
