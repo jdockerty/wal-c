@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 
 int main(int argc, char *argv[]) {
@@ -13,6 +12,11 @@ int main(int argc, char *argv[]) {
     char* subcmd = argv[1];
     if (strcmp(subcmd, "create") == 0) {
         char* dir = argv[2];
+        if (dir == NULL) {
+            fprintf(stderr, "Must provide a directory.\n");
+            exit(1);
+        }
+
         char* wal_path;
         asprintf(&wal_path, "%s/0.wal", dir);
 
@@ -20,11 +24,6 @@ int main(int argc, char *argv[]) {
         if (file != NULL) {
             printf("Created %s\n", wal_path);
         } else {
-            if (errno == 14) {
-                fprintf(stderr, "No path provided\n");
-            } else {
-                fprintf(stderr, "Unable to create %s, %d\n", wal_path, errno);
-            }
             exit(1);
         }
     } else if (strcmp(subcmd, "write") == 0) {
