@@ -1,28 +1,29 @@
 #include "wal.h"
-#include <_string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 //char* parse_key(char* input) {}
 //
 //char* parse_value(char* input) {}
 
 void parse_input(SegmentEntry* entries, char* input) {
-    char* buf;
-    SegmentEntry entry;
-    char* token;
+    char* kv_pair = strtok(input, ",");
+    int index = 0;
 
-    // Iterate over the input string until there are no more delimited tokens
-    // remaining.
-    while (( (token = strsep(&input, ",")) != NULL)) {
-        int i;
-        // The values are delimited via '=', so we must iterate over the returned
-        // token twice.
-        for (i=0; i<2; i++) {
-            char* kv = strsep(&token, "=");
-            printf("%s\n", kv);
+    while (kv_pair != NULL) {
+
+        char* pair = strchr(kv_pair, '=');
+
+        if (pair != NULL) {
+            // Separate key and value
+            *pair = '\0'; // Split the string at '='
+            entries[index].key = strdup(kv_pair); // Duplicate key
+            entries[index].value = strdup(pair + 1); // Duplicate value
+            index++;
         }
+        kv_pair = strtok(NULL, ",");
     }
 }
 
