@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#define WAL_HEADER "w0"
+// Magic bytes that are expected at the start of a WAL file.
+#define WAL_HEADER "w1"
 
 typedef struct S {
     char* key;
