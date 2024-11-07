@@ -2,3 +2,4 @@
 wal-c
 # Local testing directory
 wal-test
+*.wal
