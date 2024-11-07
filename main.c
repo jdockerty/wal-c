@@ -125,7 +125,13 @@ int main(int argc, char *argv[]) {
         int line_count = count_lines(wal_file);
         // The cursor must be reset after counting the lines, as this takes
         // us to EOF.
-        fseek(wal_file, SEEK_SET, 0);
+        // We do not reset to the beginning of the file, rather after the header,
+        // which is known to exist at this point.
+        int res = fseek(wal_file, strlen(WAL_HEADER), SEEK_SET);
+        if (res != 0) {
+            fprintf(stderr, "Unable to seek cursor to after the WAL header.\n");
+            exit(EXIT_FAILURE);
+        }
 
         int i;
         for (i=0; i < line_count; i++) {
