@@ -100,13 +100,11 @@ int main(int argc, char *argv[]) {
         }
         fclose(wal_file);
     } else if (strcmp(subcmd, "replay") == 0) {
-        char* dir = argv[2];
-        if (dir == NULL) {
+        char* wal_path = argv[2];
+        if (wal_path == NULL) {
             fprintf(stderr, "Must provide a directory.\n");
             exit(1);
         }
-
-        char* wal_path = generate_wal_path(dir, 0);
 
         FILE * wal_file;
         wal_file = fopen(wal_path, "r");
