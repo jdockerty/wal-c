@@ -4,13 +4,13 @@
 #include <string.h>
 
 bool has_header(FILE *wal_file) {
-    fseek(wal_file, SEEK_SET, 0);
-    char header[2];
-    fread(header, sizeof(char), 2, wal_file);
-
+    char header[strlen(WAL_HEADER) + 1]; // header + NULL terminator
+    fseek(wal_file, 0, SEEK_SET);
+    fread(header, sizeof(char), strlen(WAL_HEADER), wal_file);
+    header[2] = '\0';
     return strcmp(header, WAL_HEADER) == 0;
 }
 
 void write_header(FILE *wal_file) {
-    fwrite(WAL_HEADER, sizeof(char), 2, wal_file);
+    fwrite(WAL_HEADER, sizeof(WAL_HEADER[0]), strlen(WAL_HEADER), wal_file);
 }
