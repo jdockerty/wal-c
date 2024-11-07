@@ -59,7 +59,7 @@ int count_lines(FILE* file) {
 int main(int argc, char *argv[]) {
     if (argc == 1) {
         fprintf(stderr, "No command given\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     char* subcmd = argv[1];
@@ -67,14 +67,14 @@ int main(int argc, char *argv[]) {
         char* wal_file_path = argv[2];
         if (wal_file_path == NULL) {
             fprintf(stderr, "Must provide a path to a WAL file");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         fprintf(stderr, "Opened %s\n", wal_file_path);
 
         char* input = argv[3];
         if (input == NULL) {
             fprintf(stderr, "key-value input is required.\n");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         SegmentEntry entries[10]; // TODO: entry count ahead of time?
         int count = parse_input(entries, input);
@@ -83,33 +83,44 @@ int main(int argc, char *argv[]) {
         FILE* wal_file = fopen(wal_file_path, "a+");
         if (wal_file == NULL) {
             fprintf(stderr, "Unable to open %s\n", wal_file_path);
-            exit(1);
+            exit(EXIT_FAILURE);
+        }
+
+        // If the file doesn't have the header, it should be written. This is
+        // the first time the file has been written to.
+        if (!has_header(wal_file)) {
+            write_header(wal_file);
         }
 
         int i = 0;
+        int bytes = 0;
         for (i=0; i < count; i++) {
             int key_len = strlen(entries[i].key);
-            printf("%s is %d\n", entries[i].key, key_len);
             int value_len = strlen(entries[i].value);
-            printf("%s is %d\n", entries[i].value, value_len);
-            fwrite(&key_len, sizeof(int), 1, wal_file);
-            fwrite(&value_len, sizeof(int), 1, wal_file);
-            fwrite(entries[i].key, sizeof(char), key_len, wal_file);
-            fwrite(entries[i].value, sizeof(char), value_len, wal_file);
-            fwrite("\n", sizeof(char), 1, wal_file);
+            bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
+            bytes += fwrite(&value_len, sizeof(int), 1, wal_file);
+            bytes += fwrite(entries[i].key, sizeof(char), key_len, wal_file);
+            bytes += fwrite(entries[i].value, sizeof(char), value_len, wal_file);
+            bytes += fwrite("\n", sizeof(char), 1, wal_file);
         }
         fclose(wal_file);
+        fprintf(stderr, "Wrote %d bytes\n", bytes);
     } else if (strcmp(subcmd, "replay") == 0) {
         char* wal_path = argv[2];
         if (wal_path == NULL) {
             fprintf(stderr, "Must provide a directory.\n");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 
         FILE * wal_file;
         wal_file = fopen(wal_path, "r");
         if (wal_file == NULL)
             exit(EXIT_FAILURE);
+
+        if (!has_header(wal_file)) {
+            fprintf(stderr, "%s is not a WAL file, the expected header was not present.\n", wal_path);
+            exit(EXIT_FAILURE);
+        }
 
         int line_count = count_lines(wal_file);
         // The cursor must be reset after counting the lines, as this takes
@@ -141,7 +152,7 @@ int main(int argc, char *argv[]) {
         fclose(wal_file);
     } else {
         printf("Unrecognised command: %s\n", subcmd);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     return 0;
