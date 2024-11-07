@@ -137,7 +137,7 @@ int main(int argc, char *argv[]) {
         }
 
         int i;
-        for (i=0; i < line_count; i++) {
+        for (i=0; i < num_entries; i++) {
             int key_len, value_len;
 
             // Read the key/value lengths that were encoded.
