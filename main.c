@@ -122,10 +122,13 @@ int main(int argc, char *argv[]) {
             exit(EXIT_FAILURE);
         }
 
-        int line_count = count_lines(wal_file);
-        // The cursor must be reset after counting the lines, as this takes
-        // us to EOF.
-        // We do not reset to the beginning of the file, rather after the header,
+        int entries_res = fseek(wal_file, -sizeof(int), SEEK_END);
+        int num_entries;
+        fread(&num_entries, sizeof(int), 1, wal_file);
+
+        // The cursor must be reset after reading the metadata, as this takes us 
+        // to near-EOF.
+        // We do not reset to the beginning of the file, rather after the header
         // which is known to exist at this point.
         int res = fseek(wal_file, strlen(WAL_HEADER), SEEK_SET);
         if (res != 0) {
@@ -134,7 +137,7 @@ int main(int argc, char *argv[]) {
         }
 
         int i;
-        for (i=0; i < line_count; i++) {
+        for (i=0; i < num_entries; i++) {
             int key_len, value_len;
 
             // Read the key/value lengths that were encoded.
@@ -154,8 +157,34 @@ int main(int argc, char *argv[]) {
             // simply be discarded.
             fgetc(wal_file);
         }
-
         fclose(wal_file);
+    } else if (strcmp(subcmd, "close") == 0) {
+        char* wal_path = argv[2];
+        if (wal_path == NULL) {
+            fprintf(stderr, "Must provide a directory.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        FILE * wal_file;
+        wal_file = fopen(wal_path, "a+");
+        if (wal_file == NULL) {
+            exit(EXIT_FAILURE);
+        }
+
+        fseek(wal_file, 0, SEEK_SET);
+
+        if (!has_header(wal_file)) {
+            fprintf(stderr, "%s is not a WAL file, the expected header was not present.\n", wal_path);
+            exit(EXIT_FAILURE);
+        }
+
+        int entries = count_lines(wal_file);
+        // Seek to the end of the file so that we can encode the metadata.
+        fseek(wal_file, 0, SEEK_END);
+
+        int bytes = fwrite(&entries, sizeof(int), 1, wal_file);
+        fclose(wal_file);
+        fprintf(stderr, "%s has been closed and marked as immutable.\n", wal_path);
     } else {
         printf("Unrecognised command: %s\n", subcmd);
         exit(EXIT_FAILURE);
