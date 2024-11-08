@@ -6,16 +6,28 @@
 
 #define BUF_SIZE 65536
 
-int parse_input(SegmentEntry* entries, char* input) {
+int count_entries(char* input) {
+    int count = 0;
     char* kv_pair = strtok(input, ",");
+
+    while (kv_pair != NULL) {
+        count++;
+        kv_pair = strtok(NULL, ",");
+    }
+
+    return count;
+}
+
+void parse_input(SegmentEntry* entries, char* input) {
+
     int index = 0;
+    char* kv_pair = strtok(input, ",");
 
     while (kv_pair != NULL) {
 
         char* pair = strchr(kv_pair, '=');
 
         if (pair != NULL) {
-            // Separate key and value
             *pair = '\0'; // Split the string at '='
             entries[index].key = strdup(kv_pair); // Duplicate key
             entries[index].value = strdup(pair + 1); // Duplicate value
@@ -23,8 +35,6 @@ int parse_input(SegmentEntry* entries, char* input) {
         }
         kv_pair = strtok(NULL, ",");
     }
-
-    return index;
 }
 
 
@@ -89,8 +99,9 @@ int main(int argc, char *argv[]) {
             exit(EXIT_FAILURE);
         }
 
-        SegmentEntry entries[10];
-        int count = parse_input(entries, input);
+        int count = count_entries(input);
+        SegmentEntry entries[count];
+        parse_input(entries, input);
 
         // If the file doesn't have the header, it should be written. This is
         // the first time the file has been written to.
@@ -101,6 +112,7 @@ int main(int argc, char *argv[]) {
         int i = 0;
         int bytes = 0;
         for (i=0; i < count; i++) {
+            printf("%s=%s\n", entries[i].key, entries[i].value);
             int key_len = strlen(entries[i].key);
             int value_len = strlen(entries[i].value);
             bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
