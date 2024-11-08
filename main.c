@@ -76,8 +76,6 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "key-value input is required.\n");
             exit(EXIT_FAILURE);
         }
-        SegmentEntry* entries;
-        int count = parse_input(entries, input);
 
         // Open the file for appending at the end.
         FILE* wal_file = fopen(wal_file_path, "a+");
@@ -85,6 +83,14 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Unable to open %s\n", wal_file_path);
             exit(EXIT_FAILURE);
         }
+
+        if (is_closed(wal_file)) {
+            fprintf(stderr, "Cannot write to closed file.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        SegmentEntry entries[10];
+        int count = parse_input(entries, input);
 
         // If the file doesn't have the header, it should be written. This is
         // the first time the file has been written to.
