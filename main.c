@@ -6,16 +6,26 @@
 
 #define BUF_SIZE 65536
 
-int parse_input(SegmentEntry* entries, char* input) {
+int count_entries(char* input) {
+    int count = 0;
     char* kv_pair = strtok(input, ",");
-    int index = 0;
 
     while (kv_pair != NULL) {
+        count++;
+        kv_pair = strtok(NULL, ",");
+    }
 
+    return count;
+}
+
+void parse_input(SegmentEntry* entries, char* input) {
+
+    int index = 0;
+    char* kv_pair = strtok(input, ",");
+
+    while (kv_pair != NULL) {
         char* pair = strchr(kv_pair, '=');
-
         if (pair != NULL) {
-            // Separate key and value
             *pair = '\0'; // Split the string at '='
             entries[index].key = strdup(kv_pair); // Duplicate key
             entries[index].value = strdup(pair + 1); // Duplicate value
@@ -23,8 +33,6 @@ int parse_input(SegmentEntry* entries, char* input) {
         }
         kv_pair = strtok(NULL, ",");
     }
-
-    return index;
 }
 
 
@@ -89,8 +97,19 @@ int main(int argc, char *argv[]) {
             exit(EXIT_FAILURE);
         }
 
-        SegmentEntry entries[10];
-        int count = parse_input(entries, input);
+        // Counting the entries will modify the string, make a copy of it
+        // that we can use later.
+        char input_to_parse[strlen(input)];
+        strcpy(input_to_parse, input);
+        // Add a null character to the end to delimit the end of the string.
+        input_to_parse[strlen(input)] = '\0';
+
+        // TODO: do not modify the string during entry count so that we can
+        // avoid copying it above.
+        int count = count_entries(input);
+
+        SegmentEntry entries[count];
+        parse_input(entries, input_to_parse);
 
         // If the file doesn't have the header, it should be written. This is
         // the first time the file has been written to.
@@ -133,12 +152,10 @@ int main(int argc, char *argv[]) {
 
         int num_entries;
         if (is_closed(wal_file)) {
-            fprintf(stderr, "Marked as closed\n");
             seek_after_header(wal_file);
             // Read the number of entries from the metadata footer.
             num_entries = entries_metadata(wal_file);
         } else {
-            fprintf(stderr, "Not marked as closed\n");
             seek_after_header(wal_file);
             // When the file has not been closed, there is no metadata to read
             // so we must resort to counting the number of entries ourselves.
