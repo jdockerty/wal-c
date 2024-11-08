@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "key-value input is required.\n");
             exit(EXIT_FAILURE);
         }
-        SegmentEntry entries[10]; // TODO: entry count ahead of time?
+        SegmentEntry* entries;
         int count = parse_input(entries, input);
 
         // Open the file for appending at the end.
@@ -112,19 +112,32 @@ int main(int argc, char *argv[]) {
             exit(EXIT_FAILURE);
         }
 
-        FILE * wal_file;
+        FILE* wal_file;
         wal_file = fopen(wal_path, "r");
-        if (wal_file == NULL)
+        if (wal_file == NULL) {
             exit(EXIT_FAILURE);
+        }
 
         if (!has_header(wal_file)) {
             fprintf(stderr, "%s is not a WAL file, the expected header was not present.\n", wal_path);
             exit(EXIT_FAILURE);
         }
 
-        int entries_res = fseek(wal_file, -sizeof(int), SEEK_END);
+        fprintf(stderr, "Attempting to replay %s\n", wal_path);
+
         int num_entries;
-        fread(&num_entries, sizeof(int), 1, wal_file);
+        if (is_closed(wal_file)) {
+            fprintf(stderr, "Marked as closed\n");
+            seek_after_header(wal_file);
+            // Read the number of entries from the metadata footer.
+            num_entries = entries_metadata(wal_file);
+        } else {
+            fprintf(stderr, "Not marked as closed\n");
+            seek_after_header(wal_file);
+            // When the file has not been closed, there is no metadata to read
+            // so we must resort to counting the number of entries ourselves.
+            num_entries = count_lines(wal_file);
+        }
 
         // The cursor must be reset after reading the metadata, as this takes us 
         // to near-EOF.
@@ -182,7 +195,7 @@ int main(int argc, char *argv[]) {
         // Seek to the end of the file so that we can encode the metadata.
         fseek(wal_file, 0, SEEK_END);
 
-        int bytes = fwrite(&entries, sizeof(int), 1, wal_file);
+        write_metadata(wal_file, entries);
         fclose(wal_file);
         fprintf(stderr, "%s has been closed and marked as immutable.\n", wal_path);
     } else {
