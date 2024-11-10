@@ -10,6 +10,9 @@
 // Magic bytes that are expected at the end of a WAL file.
 #define WAL_FOOTER "wf"
 
+// The type of operation that was encoded.
+enum Operation { INSERT, DELETE };
+
 typedef struct S {
   char *key;
   char *value;
