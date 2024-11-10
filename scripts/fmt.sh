@@ -1,4 +1,5 @@
-#!/bin/env sh
+#!/usr/bin/env sh
+
 files=$(find . -name "*.[c|h]")
 
 for f in $files; do
