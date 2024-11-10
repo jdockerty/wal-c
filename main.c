@@ -117,11 +117,14 @@ int main(int argc, char *argv[]) {
       write_header(wal_file);
     }
 
+    enum Operation operation_type = INSERT;
+
     int i = 0;
     int bytes = 0;
     for (i = 0; i < count; i++) {
       int key_len = strlen(entries[i].key);
       int value_len = strlen(entries[i].value);
+      bytes += fwrite(&operation_type, sizeof(int), 1, wal_file);
       bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
       bytes += fwrite(&value_len, sizeof(int), 1, wal_file);
       bytes += fwrite(entries[i].key, sizeof(char), key_len, wal_file);
@@ -177,6 +180,10 @@ int main(int argc, char *argv[]) {
     int i;
     for (i = 0; i < num_entries; i++) {
       int key_len, value_len;
+
+      enum Operation operation_type;
+
+      fread(&operation_type, sizeof(int), 1, wal_file);
 
       // Read the key/value lengths that were encoded.
       fread(&key_len, sizeof(int), 1, wal_file);
