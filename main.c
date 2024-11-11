@@ -78,6 +78,22 @@ int count_lines(FILE *file) {
   return counter;
 }
 
+int handle_op(FILE *wal_file, SegmentEntry entries[], int count, int op) {
+  int i = 0;
+  int bytes = 0;
+  for (i = 0; i < count; i++) {
+    int key_len = strlen(entries[i].key);
+    int value_len = strlen(entries[i].value);
+    bytes += fwrite(&op, sizeof(int), 1, wal_file);
+    bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
+    bytes += fwrite(&value_len, sizeof(int), 1, wal_file);
+    bytes += fwrite(entries[i].key, sizeof(char), key_len, wal_file);
+    bytes += fwrite(entries[i].value, sizeof(char), value_len, wal_file);
+    bytes += fwrite("\n", sizeof(char), 1, wal_file);
+  }
+  return bytes;
+}
+
 int main(int argc, char *argv[]) {
   if (argc == 1) {
     fprintf(stderr, "No command given\n");
@@ -151,19 +167,7 @@ int main(int argc, char *argv[]) {
       }
 
       enum Operation operation_type = INSERT;
-
-      int i = 0;
-      int bytes = 0;
-      for (i = 0; i < count; i++) {
-        int key_len = strlen(entries[i].key);
-        int value_len = strlen(entries[i].value);
-        bytes += fwrite(&operation_type, sizeof(int), 1, wal_file);
-        bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
-        bytes += fwrite(&value_len, sizeof(int), 1, wal_file);
-        bytes += fwrite(entries[i].key, sizeof(char), key_len, wal_file);
-        bytes += fwrite(entries[i].value, sizeof(char), value_len, wal_file);
-        bytes += fwrite("\n", sizeof(char), 1, wal_file);
-      }
+      int bytes = handle_op(wal_file, entries, count, operation_type);
       fclose(wal_file);
       fprintf(stderr, "Wrote %d bytes\n", bytes);
     } else if (strcmp(subcmd, "delete") == 0) {
@@ -213,19 +217,7 @@ int main(int argc, char *argv[]) {
       }
 
       enum Operation operation_type = DELETE;
-
-      int i = 0;
-      int bytes = 0;
-      for (i = 0; i < count; i++) {
-        int key_len = strlen(entries[i].key);
-        int value_len = strlen(entries[i].value);
-        bytes += fwrite(&operation_type, sizeof(int), 1, wal_file);
-        bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
-        bytes += fwrite(&value_len, sizeof(int), 1, wal_file);
-        bytes += fwrite(entries[i].key, sizeof(char), key_len, wal_file);
-        bytes += fwrite(entries[i].value, sizeof(char), value_len, wal_file);
-        bytes += fwrite("\n", sizeof(char), 1, wal_file);
-      }
+      int bytes = handle_op(wal_file, entries, count, operation_type);
       fclose(wal_file);
       fprintf(stderr, "Wrote %d bytes\n", bytes);
 
