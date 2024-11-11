@@ -331,7 +331,7 @@ int main(int argc, char *argv[]) {
     }
   } else {
     fprintf(stderr, "No subcommand provided.\n");
-    fprintf(stderr, "Expected either: 'write', 'replay', or 'close'\n");
+    fprintf(stderr, "Expected either: 'write', 'delete', 'replay', or 'close'\n");
     exit(EXIT_FAILURE);
   }
 
