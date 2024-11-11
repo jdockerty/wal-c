@@ -5,9 +5,20 @@
 #include <string.h>
 #include <unistd.h>
 
-static int show_deletes;
+static bool show_deletes;
+
+#define DELETE_OP "DELETE";
+#define INSERT_OP "INSERT";
 
 #define BUF_SIZE 65536
+
+char *operation_to_string(int op) {
+  if (op == DELETE) {
+    return DELETE_OP;
+  } else {
+    return INSERT_OP;
+  }
+}
 
 int count_entries(char *input) {
   int count = 0;
@@ -65,6 +76,22 @@ int count_lines(FILE *file) {
   }
 
   return counter;
+}
+
+int handle_op(FILE *wal_file, SegmentEntry entries[], int count, int op) {
+  int i = 0;
+  int bytes = 0;
+  for (i = 0; i < count; i++) {
+    int key_len = strlen(entries[i].key);
+    int value_len = strlen(entries[i].value);
+    bytes += fwrite(&op, sizeof(int), 1, wal_file);
+    bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
+    bytes += fwrite(&value_len, sizeof(int), 1, wal_file);
+    bytes += fwrite(entries[i].key, sizeof(char), key_len, wal_file);
+    bytes += fwrite(entries[i].value, sizeof(char), value_len, wal_file);
+    bytes += fwrite("\n", sizeof(char), 1, wal_file);
+  }
+  return bytes;
 }
 
 int main(int argc, char *argv[]) {
@@ -140,21 +167,60 @@ int main(int argc, char *argv[]) {
       }
 
       enum Operation operation_type = INSERT;
-
-      int i = 0;
-      int bytes = 0;
-      for (i = 0; i < count; i++) {
-        int key_len = strlen(entries[i].key);
-        int value_len = strlen(entries[i].value);
-        bytes += fwrite(&operation_type, sizeof(int), 1, wal_file);
-        bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
-        bytes += fwrite(&value_len, sizeof(int), 1, wal_file);
-        bytes += fwrite(entries[i].key, sizeof(char), key_len, wal_file);
-        bytes += fwrite(entries[i].value, sizeof(char), value_len, wal_file);
-        bytes += fwrite("\n", sizeof(char), 1, wal_file);
-      }
+      int bytes = handle_op(wal_file, entries, count, operation_type);
       fclose(wal_file);
       fprintf(stderr, "Wrote %d bytes\n", bytes);
+    } else if (strcmp(subcmd, "delete") == 0) {
+      char *wal_file_path = argv[optind + 1];
+      if (wal_file_path == NULL) {
+        fprintf(stderr, "Must provide a path to a WAL file");
+        exit(EXIT_FAILURE);
+      }
+      fprintf(stderr, "Opened %s\n", wal_file_path);
+
+      char *input = argv[optind + 2];
+      if (input == NULL) {
+        fprintf(stderr, "key-value input is required.\n");
+        exit(EXIT_FAILURE);
+      }
+
+      // Open the file for appending at the end.
+      FILE *wal_file = fopen(wal_file_path, "a+");
+      if (wal_file == NULL) {
+        fprintf(stderr, "Unable to open %s\n", wal_file_path);
+        exit(EXIT_FAILURE);
+      }
+
+      if (is_closed(wal_file)) {
+        fprintf(stderr, "Cannot write to closed file.\n");
+        exit(EXIT_FAILURE);
+      }
+
+      // Counting the entries will modify the string, make a copy of it
+      // that we can use later.
+      char input_to_parse[strlen(input)];
+      strcpy(input_to_parse, input);
+      // Add a null character to the end to delimit the end of the string.
+      input_to_parse[strlen(input)] = '\0';
+
+      // TODO: do not modify the string during entry count so that we can
+      // avoid copying it above.
+      int count = count_entries(input);
+
+      SegmentEntry entries[count];
+      parse_input(entries, input_to_parse);
+
+      // If the file doesn't have the header, it should be written. This is
+      // the first time the file has been written to.
+      if (!has_header(wal_file)) {
+        write_header(wal_file);
+      }
+
+      enum Operation operation_type = DELETE;
+      int bytes = handle_op(wal_file, entries, count, operation_type);
+      fclose(wal_file);
+      fprintf(stderr, "Wrote %d bytes\n", bytes);
+
     } else if (strcmp(subcmd, "replay") == 0) {
       char *wal_path = argv[optind + 1];
       if (wal_path == NULL) {
@@ -204,13 +270,12 @@ int main(int argc, char *argv[]) {
         int key_len, value_len;
 
         enum Operation operation_type;
+        fread(&operation_type, sizeof(int), 1, wal_file);
 
         // By default, deletes should be skipped.
-        if (!show_deletes) {
+        if (operation_type == DELETE && !show_deletes) {
           continue;
         }
-
-        fread(&operation_type, sizeof(int), 1, wal_file);
 
         // Read the key/value lengths that were encoded.
         fread(&key_len, sizeof(int), 1, wal_file);
@@ -221,7 +286,7 @@ int main(int argc, char *argv[]) {
 
         fread(key, sizeof(char), key_len, wal_file);
         fread(value, sizeof(char), value_len, wal_file);
-        printf("%s=%s\n", key, value);
+        printf("[%s] %s=%s\n", operation_to_string(operation_type), key, value);
         free(key);
         free(value);
 
@@ -266,7 +331,7 @@ int main(int argc, char *argv[]) {
     }
   } else {
     fprintf(stderr, "No subcommand provided.\n");
-    fprintf(stderr, "Expected either: 'write', 'replay', or 'close'\n");
+    fprintf(stderr, "Expected either: 'write', 'delete', 'replay', or 'close'\n");
     exit(EXIT_FAILURE);
   }
 
