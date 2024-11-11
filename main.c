@@ -1,8 +1,11 @@
 #include "wal.h"
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+static int show_deletes;
 
 #define BUF_SIZE 65536
 
@@ -70,170 +73,200 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  char *subcmd = argv[1];
-  if (strcmp(subcmd, "write") == 0) {
-    char *wal_file_path = argv[2];
-    if (wal_file_path == NULL) {
-      fprintf(stderr, "Must provide a path to a WAL file");
+  int opt;
+
+  while ((opt = getopt(argc, argv, "s")) != -1) {
+    switch (opt) {
+    case 's':
+      fprintf(stderr, "Deletes will be shown\n");
+      show_deletes = true;
+      break;
+    case '?':
+      fprintf(stderr, "Unknown option\n");
+      exit(EXIT_FAILURE);
+    default:
+      fprintf(stderr, "Usage here\n");
       exit(EXIT_FAILURE);
     }
-    fprintf(stderr, "Opened %s\n", wal_file_path);
+  }
 
-    char *input = argv[3];
-    if (input == NULL) {
-      fprintf(stderr, "key-value input is required.\n");
-      exit(EXIT_FAILURE);
-    }
+  // Handle subcommands being passed
+  if (optind < argc) {
+    char *subcmd = argv[optind];
+    if (strcmp(subcmd, "write") == 0) {
+      char *wal_file_path = argv[optind + 1];
+      if (wal_file_path == NULL) {
+        fprintf(stderr, "Must provide a path to a WAL file");
+        exit(EXIT_FAILURE);
+      }
+      fprintf(stderr, "Opened %s\n", wal_file_path);
 
-    // Open the file for appending at the end.
-    FILE *wal_file = fopen(wal_file_path, "a+");
-    if (wal_file == NULL) {
-      fprintf(stderr, "Unable to open %s\n", wal_file_path);
-      exit(EXIT_FAILURE);
-    }
+      char *input = argv[optind + 2];
+      if (input == NULL) {
+        fprintf(stderr, "key-value input is required.\n");
+        exit(EXIT_FAILURE);
+      }
 
-    if (is_closed(wal_file)) {
-      fprintf(stderr, "Cannot write to closed file.\n");
-      exit(EXIT_FAILURE);
-    }
+      // Open the file for appending at the end.
+      FILE *wal_file = fopen(wal_file_path, "a+");
+      if (wal_file == NULL) {
+        fprintf(stderr, "Unable to open %s\n", wal_file_path);
+        exit(EXIT_FAILURE);
+      }
 
-    // Counting the entries will modify the string, make a copy of it
-    // that we can use later.
-    char input_to_parse[strlen(input)];
-    strcpy(input_to_parse, input);
-    // Add a null character to the end to delimit the end of the string.
-    input_to_parse[strlen(input)] = '\0';
+      if (is_closed(wal_file)) {
+        fprintf(stderr, "Cannot write to closed file.\n");
+        exit(EXIT_FAILURE);
+      }
 
-    // TODO: do not modify the string during entry count so that we can
-    // avoid copying it above.
-    int count = count_entries(input);
+      // Counting the entries will modify the string, make a copy of it
+      // that we can use later.
+      char input_to_parse[strlen(input)];
+      strcpy(input_to_parse, input);
+      // Add a null character to the end to delimit the end of the string.
+      input_to_parse[strlen(input)] = '\0';
 
-    SegmentEntry entries[count];
-    parse_input(entries, input_to_parse);
+      // TODO: do not modify the string during entry count so that we can
+      // avoid copying it above.
+      int count = count_entries(input);
 
-    // If the file doesn't have the header, it should be written. This is
-    // the first time the file has been written to.
-    if (!has_header(wal_file)) {
-      write_header(wal_file);
-    }
+      SegmentEntry entries[count];
+      parse_input(entries, input_to_parse);
 
-    enum Operation operation_type = INSERT;
+      // If the file doesn't have the header, it should be written. This is
+      // the first time the file has been written to.
+      if (!has_header(wal_file)) {
+        write_header(wal_file);
+      }
 
-    int i = 0;
-    int bytes = 0;
-    for (i = 0; i < count; i++) {
-      int key_len = strlen(entries[i].key);
-      int value_len = strlen(entries[i].value);
-      bytes += fwrite(&operation_type, sizeof(int), 1, wal_file);
-      bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
-      bytes += fwrite(&value_len, sizeof(int), 1, wal_file);
-      bytes += fwrite(entries[i].key, sizeof(char), key_len, wal_file);
-      bytes += fwrite(entries[i].value, sizeof(char), value_len, wal_file);
-      bytes += fwrite("\n", sizeof(char), 1, wal_file);
-    }
-    fclose(wal_file);
-    fprintf(stderr, "Wrote %d bytes\n", bytes);
-  } else if (strcmp(subcmd, "replay") == 0) {
-    char *wal_path = argv[2];
-    if (wal_path == NULL) {
-      fprintf(stderr, "Must provide a directory.\n");
-      exit(EXIT_FAILURE);
-    }
+      enum Operation operation_type = INSERT;
 
-    FILE *wal_file;
-    wal_file = fopen(wal_path, "r");
-    if (wal_file == NULL) {
-      exit(EXIT_FAILURE);
-    }
+      int i = 0;
+      int bytes = 0;
+      for (i = 0; i < count; i++) {
+        int key_len = strlen(entries[i].key);
+        int value_len = strlen(entries[i].value);
+        bytes += fwrite(&operation_type, sizeof(int), 1, wal_file);
+        bytes += fwrite(&key_len, sizeof(int), 1, wal_file);
+        bytes += fwrite(&value_len, sizeof(int), 1, wal_file);
+        bytes += fwrite(entries[i].key, sizeof(char), key_len, wal_file);
+        bytes += fwrite(entries[i].value, sizeof(char), value_len, wal_file);
+        bytes += fwrite("\n", sizeof(char), 1, wal_file);
+      }
+      fclose(wal_file);
+      fprintf(stderr, "Wrote %d bytes\n", bytes);
+    } else if (strcmp(subcmd, "replay") == 0) {
+      char *wal_path = argv[optind + 1];
+      if (wal_path == NULL) {
+        fprintf(stderr, "Must provide a directory.\n");
+        exit(EXIT_FAILURE);
+      }
 
-    if (!has_header(wal_file)) {
-      fprintf(stderr,
-              "%s is not a WAL file, the expected header was not present.\n",
+      FILE *wal_file;
+      wal_file = fopen(wal_path, "r");
+      if (wal_file == NULL) {
+        exit(EXIT_FAILURE);
+      }
+
+      if (!has_header(wal_file)) {
+        fprintf(stderr,
+                "%s is not a WAL file, the expected header was not present.\n",
+                wal_path);
+        exit(EXIT_FAILURE);
+      }
+
+      fprintf(stderr, "Attempting to replay %s\n", wal_path);
+
+      int num_entries;
+      if (is_closed(wal_file)) {
+        seek_after_header(wal_file);
+        // Read the number of entries from the metadata footer.
+        num_entries = entries_metadata(wal_file);
+      } else {
+        seek_after_header(wal_file);
+        // When the file has not been closed, there is no metadata to read
+        // so we must resort to counting the number of entries ourselves.
+        num_entries = count_lines(wal_file);
+      }
+
+      // The cursor must be reset after reading the metadata, as this takes us
+      // to near-EOF.
+      // We do not reset to the beginning of the file, rather after the header
+      // which is known to exist at this point.
+      int res = fseek(wal_file, strlen(WAL_HEADER), SEEK_SET);
+      if (res != 0) {
+        fprintf(stderr, "Unable to seek cursor to after the WAL header.\n");
+        exit(EXIT_FAILURE);
+      }
+
+      int i;
+      for (i = 0; i < num_entries; i++) {
+        int key_len, value_len;
+
+        enum Operation operation_type;
+
+        // By default, deletes should be skipped.
+        if (!show_deletes) {
+          continue;
+        }
+
+        fread(&operation_type, sizeof(int), 1, wal_file);
+
+        // Read the key/value lengths that were encoded.
+        fread(&key_len, sizeof(int), 1, wal_file);
+        fread(&value_len, sizeof(int), 1, wal_file);
+
+        char *key = malloc(key_len);
+        char *value = malloc(value_len);
+
+        fread(key, sizeof(char), key_len, wal_file);
+        fread(value, sizeof(char), value_len, wal_file);
+        printf("%s=%s\n", key, value);
+        free(key);
+        free(value);
+
+        // Move the cursor by 1 character for the newline, the result can
+        // simply be discarded.
+        fgetc(wal_file);
+      }
+      fclose(wal_file);
+    } else if (strcmp(subcmd, "close") == 0) {
+      char *wal_path = argv[optind + 1];
+      if (wal_path == NULL) {
+        fprintf(stderr, "Must provide a directory.\n");
+        exit(EXIT_FAILURE);
+      }
+
+      FILE *wal_file;
+      wal_file = fopen(wal_path, "a+");
+      if (wal_file == NULL) {
+        exit(EXIT_FAILURE);
+      }
+
+      fseek(wal_file, 0, SEEK_SET);
+
+      if (!has_header(wal_file)) {
+        fprintf(stderr,
+                "%s is not a WAL file, the expected header was not present.\n",
+                wal_path);
+        exit(EXIT_FAILURE);
+      }
+
+      int entries = count_lines(wal_file);
+      // Seek to the end of the file so that we can encode the metadata.
+      fseek(wal_file, 0, SEEK_END);
+
+      write_metadata(wal_file, entries);
+      fclose(wal_file);
+      fprintf(stderr, "%s has been closed and marked as immutable.\n",
               wal_path);
-      exit(EXIT_FAILURE);
-    }
-
-    fprintf(stderr, "Attempting to replay %s\n", wal_path);
-
-    int num_entries;
-    if (is_closed(wal_file)) {
-      seek_after_header(wal_file);
-      // Read the number of entries from the metadata footer.
-      num_entries = entries_metadata(wal_file);
     } else {
-      seek_after_header(wal_file);
-      // When the file has not been closed, there is no metadata to read
-      // so we must resort to counting the number of entries ourselves.
-      num_entries = count_lines(wal_file);
-    }
-
-    // The cursor must be reset after reading the metadata, as this takes us
-    // to near-EOF.
-    // We do not reset to the beginning of the file, rather after the header
-    // which is known to exist at this point.
-    int res = fseek(wal_file, strlen(WAL_HEADER), SEEK_SET);
-    if (res != 0) {
-      fprintf(stderr, "Unable to seek cursor to after the WAL header.\n");
+      printf("Unrecognised command: %s\n", subcmd);
       exit(EXIT_FAILURE);
     }
-
-    int i;
-    for (i = 0; i < num_entries; i++) {
-      int key_len, value_len;
-
-      enum Operation operation_type;
-
-      fread(&operation_type, sizeof(int), 1, wal_file);
-
-      // Read the key/value lengths that were encoded.
-      fread(&key_len, sizeof(int), 1, wal_file);
-      fread(&value_len, sizeof(int), 1, wal_file);
-
-      char *key = malloc(key_len);
-      char *value = malloc(value_len);
-
-      fread(key, sizeof(char), key_len, wal_file);
-      fread(value, sizeof(char), value_len, wal_file);
-      printf("%s=%s\n", key, value);
-      free(key);
-      free(value);
-
-      // Move the cursor by 1 character for the newline, the result can
-      // simply be discarded.
-      fgetc(wal_file);
-    }
-    fclose(wal_file);
-  } else if (strcmp(subcmd, "close") == 0) {
-    char *wal_path = argv[2];
-    if (wal_path == NULL) {
-      fprintf(stderr, "Must provide a directory.\n");
-      exit(EXIT_FAILURE);
-    }
-
-    FILE *wal_file;
-    wal_file = fopen(wal_path, "a+");
-    if (wal_file == NULL) {
-      exit(EXIT_FAILURE);
-    }
-
-    fseek(wal_file, 0, SEEK_SET);
-
-    if (!has_header(wal_file)) {
-      fprintf(stderr,
-              "%s is not a WAL file, the expected header was not present.\n",
-              wal_path);
-      exit(EXIT_FAILURE);
-    }
-
-    int entries = count_lines(wal_file);
-    // Seek to the end of the file so that we can encode the metadata.
-    fseek(wal_file, 0, SEEK_END);
-
-    write_metadata(wal_file, entries);
-    fclose(wal_file);
-    fprintf(stderr, "%s has been closed and marked as immutable.\n", wal_path);
   } else {
-    printf("Unrecognised command: %s\n", subcmd);
+    fprintf(stderr, "No subcommand provided.\n");
+    fprintf(stderr, "Expected either: 'write', 'replay', or 'close'\n");
     exit(EXIT_FAILURE);
   }
 
