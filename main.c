@@ -278,13 +278,12 @@ int main(int argc, char *argv[]) {
         int key_len, value_len;
 
         enum Operation operation_type;
+        fread(&operation_type, sizeof(int), 1, wal_file);
 
         // By default, deletes should be skipped.
-        if (!show_deletes) {
+        if (operation_type == DELETE && !show_deletes) {
           continue;
         }
-
-        fread(&operation_type, sizeof(int), 1, wal_file);
 
         // Read the key/value lengths that were encoded.
         fread(&key_len, sizeof(int), 1, wal_file);
@@ -295,7 +294,7 @@ int main(int argc, char *argv[]) {
 
         fread(key, sizeof(char), key_len, wal_file);
         fread(value, sizeof(char), value_len, wal_file);
-        printf("%s=%s\n", key, value);
+        printf("[%s] %s=%s\n", operation_to_string(operation_type), key, value);
         free(key);
         free(value);
 
